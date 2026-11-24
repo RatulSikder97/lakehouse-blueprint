@@ -1,0 +1,15 @@
+# Same shape as checks.yml with thresholds sized for the 1,000-row CI fixture.
+checks for bronze.yellow_trips:
+  - row_count = 1010
+  - missing_count(trip_id) = 0
+  - duplicate_count(trip_id) = 0
+  - freshness(_ingested_at) < 1h
+
+checks for silver.trips:
+  - row_count > 900
+  - duplicate_count(trip_id) = 0
+  - min(total_amount) >= 0
+
+checks for gold.daily_trip_metrics:
+  - row_count >= 28
+  - min(trips) > 0

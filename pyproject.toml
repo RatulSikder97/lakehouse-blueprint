@@ -1,0 +1,57 @@
+[project]
+name = "lakehouse-blueprint"
+version = "0.1.0"
+description = "Local-first, production-shaped open lakehouse: MinIO + Iceberg (Lakekeeper REST) + Trino + DuckDB + dbt + Dagster."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "pyiceberg[pyarrow]~=0.12.0",
+    "pyarrow>=21,<27",
+    "duckdb>=1.4,<3",
+    "trino~=0.340.0",
+    "pyyaml~=6.0",
+]
+
+[project.scripts]
+lakehouse = "lakehouse.cli:main"
+
+[dependency-groups]
+transform = [
+    "dbt-core>=1.10,<2",
+    "dbt-trino>=1.10,<2",
+    "dbt-duckdb>=1.10,<2",
+]
+orchestration = [
+    "dagster~=1.13.0",
+    "dagster-webserver~=1.13.0",
+    "dagster-postgres~=0.29.0",
+    "dagster-dbt~=0.29.0",
+]
+dev = [
+    "pytest~=9.0",
+    "ruff~=0.17.0",
+    "sqlfluff~=4.5.0",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lakehouse"]
+
+[tool.uv]
+default-groups = ["transform", "orchestration", "dev"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

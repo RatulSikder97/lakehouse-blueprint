@@ -1,0 +1,28 @@
+# Soda-style checks (see src/lakehouse/checks.py for the supported grammar).
+# These complement dbt tests: dbt guards model contracts at build time, these guard the
+# published tables (volume, freshness, distribution drift) and run on their own schedule.
+
+checks for bronze.yellow_trips:
+  - row_count > 1000
+  - missing_count(trip_id) = 0
+  - duplicate_count(trip_id) = 0
+  - missing_count(pickup_at) = 0
+  - freshness(_ingested_at) < 2d
+
+checks for silver.trips:
+  - row_count > 1000
+  - duplicate_count(trip_id) = 0
+  - min(total_amount) >= 0
+  - max(trip_seconds) <= 21600
+  - avg(trip_miles) < 10:
+      severity: warn
+
+checks for silver.rejected_trips:
+  # Rejections above 10% of silver volume would signal an upstream format change.
+  - row_count < 400000:
+      severity: warn
+
+checks for gold.daily_trip_metrics:
+  - row_count >= 28
+  - min(trips) > 0
+  - missing_count(revenue) = 0
