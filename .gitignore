@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/
+transform/target/
+transform/logs/
+transform/dbt_packages/
+transform/ci_data/
+transform/.user.yml
+.env
+.DS_Store

@@ -1,0 +1,241 @@
+# lakehouse-blueprint: local-first open lakehouse.
+#
+# Default stack (`make up`, ~3.5 GB RAM): MinIO + Postgres + Lakekeeper (Iceberg REST) + Trino.
+# Opt-in profiles keep heavy services out of the way until you need them:
+#   tools          workbench image (ingestion, dbt, DuckDB, checks) - run on demand
+#   orchestration  Dagster webserver + daemon
+#   observability  Prometheus + Grafana
+#   spark          Spark 3.5 + Iceberg runtime for heavy ETL / maintenance procedures
+#
+# All credentials below are DEV-ONLY defaults for a laptop sandbox. Override them via
+# environment variables (or a .env file) and never reuse them anywhere real.
+
+name: lakehouse-blueprint
+
+x-dev-credentials: &dev-credentials
+  MINIO_ROOT_USER: ${MINIO_ROOT_USER:-lakehouse-admin}
+  MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev-only-change-me}
+
+x-workbench-env: &workbench-env
+  LAKEHOUSE_CATALOG_URI: http://lakekeeper:8181/catalog
+  LAKEHOUSE_WAREHOUSE: lakehouse
+  TRINO_HOST: trino
+  TRINO_PORT: "8080"
+  DAGSTER_PG_HOST: postgres
+  DAGSTER_PG_USER: dagster
+  DAGSTER_PG_PASSWORD: ${DAGSTER_PG_PASSWORD:-dev-only-dagster}
+  DAGSTER_PG_DB: dagster
+
+services:
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:bd92a45b821c0d85772c607ed7b49693efe78b3ffffae301b5d1b0981660de22
+    command: ["server", "/data", "--console-address", ":9001"]
+    user: "0:0"
+    environment:
+      <<: *dev-credentials
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+      MC_HOST_local: http://${MINIO_ROOT_USER:-lakehouse-admin}:${MINIO_ROOT_PASSWORD:-dev-only-change-me}@localhost:9000
+    volumes:
+      - minio-data:/data
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    mem_limit: 512m
+
+  minio-init:
+    image: cgr.dev/chainguard/minio@sha256:bd92a45b821c0d85772c607ed7b49693efe78b3ffffae301b5d1b0981660de22
+    entrypoint: ["bash", "/scripts/init.sh"]
+    environment:
+      <<: *dev-credentials
+      LAKEKEEPER_S3_ACCESS_KEY: ${LAKEKEEPER_S3_ACCESS_KEY:-lakekeeper}
+      LAKEKEEPER_S3_SECRET_KEY: ${LAKEKEEPER_S3_SECRET_KEY:-dev-only-lakekeeper-secret}
+    volumes:
+      - ./infra/minio:/scripts:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: postgres:17.12-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev-only-postgres}
+      LAKEKEEPER_DB_PASSWORD: ${LAKEKEEPER_DB_PASSWORD:-dev-only-lakekeeper}
+      DAGSTER_PG_PASSWORD: ${DAGSTER_PG_PASSWORD:-dev-only-dagster}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sh:/docker-entrypoint-initdb.d/10-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    mem_limit: 512m
+
+  lakekeeper-migrate:
+    image: quay.io/lakekeeper/catalog:v0.15.1
+    command: ["migrate"]
+    environment: &lakekeeper-env
+      LAKEKEEPER__PG_ENCRYPTION_KEY: ${LAKEKEEPER_ENCRYPTION_KEY:-dev-only-encryption-key-change-me}
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://lakekeeper:${LAKEKEEPER_DB_PASSWORD:-dev-only-lakekeeper}@postgres:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://lakekeeper:${LAKEKEEPER_DB_PASSWORD:-dev-only-lakekeeper}@postgres:5432/lakekeeper
+      RUST_LOG: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  lakekeeper:
+    image: quay.io/lakekeeper/catalog:v0.15.1
+    command: ["serve"]
+    environment:
+      <<: *lakekeeper-env
+    ports:
+      - "${LAKEKEEPER_PORT:-8181}:8181"
+    healthcheck:
+      test: ["CMD", "/home/nonroot/lakekeeper", "healthcheck"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      lakekeeper-migrate:
+        condition: service_completed_successfully
+    mem_limit: 256m
+
+  lakekeeper-init:
+    image: curlimages/curl:8.17.0
+    entrypoint: ["sh", "/scripts/init.sh"]
+    environment:
+      LAKEKEEPER_URL: http://lakekeeper:8181
+      LAKEKEEPER_S3_ACCESS_KEY: ${LAKEKEEPER_S3_ACCESS_KEY:-lakekeeper}
+      LAKEKEEPER_S3_SECRET_KEY: ${LAKEKEEPER_S3_SECRET_KEY:-dev-only-lakekeeper-secret}
+    volumes:
+      - ./infra/lakekeeper:/scripts:ro
+    depends_on:
+      lakekeeper:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    restart: "no"
+
+  trino:
+    image: trinodb/trino:484
+    volumes:
+      - ./infra/trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+      - ./infra/trino/jvm.config:/etc/trino/jvm.config:ro
+    ports:
+      - "${TRINO_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "/usr/lib/trino/bin/health-check"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+    depends_on:
+      lakekeeper-init:
+        condition: service_completed_successfully
+    # Heap = 65% of this limit (infra/trino/jvm.config); the rest is off-heap/native headroom.
+    mem_limit: ${TRINO_MEM_LIMIT:-3g}
+
+  workbench:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lakehouse-blueprint/workbench:local
+    profiles: ["tools"]
+    environment:
+      <<: *workbench-env
+    volumes:
+      - workbench-cache:/app/data
+    depends_on:
+      trino:
+        condition: service_healthy
+    mem_limit: ${WORKBENCH_MEM_LIMIT:-3g}
+
+  dagster-webserver:
+    image: lakehouse-blueprint/workbench:local
+    profiles: ["orchestration"]
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "/app/infra/dagster/workspace.yaml"]
+    environment:
+      <<: *workbench-env
+      DAGSTER_HOME: /app/infra/dagster
+    volumes:
+      - workbench-cache:/app/data
+    ports:
+      - "${DAGSTER_PORT:-3030}:3000"
+    depends_on:
+      trino:
+        condition: service_healthy
+    mem_limit: 2g
+
+  dagster-daemon:
+    image: lakehouse-blueprint/workbench:local
+    profiles: ["orchestration"]
+    command: ["dagster-daemon", "run", "-w", "/app/infra/dagster/workspace.yaml"]
+    environment:
+      <<: *workbench-env
+      DAGSTER_HOME: /app/infra/dagster
+    volumes:
+      - workbench-cache:/app/data
+    depends_on:
+      trino:
+        condition: service_healthy
+    mem_limit: 3g
+
+  prometheus:
+    image: prom/prometheus:v3.16.0
+    profiles: ["observability"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    mem_limit: 512m
+
+  grafana:
+    image: grafana/grafana:12.4.15
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-dev-only-grafana}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/lakehouse.json
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${GRAFANA_PORT:-3031}:3000"
+    depends_on:
+      - prometheus
+    mem_limit: 512m
+
+  spark:
+    image: apache/spark:3.5.9-scala2.12-java17-python3-ubuntu
+    profiles: ["spark"]
+    # Root only so the named ivy volume (jar cache) is writable; the container is a local CLI.
+    user: "0:0"
+    entrypoint: ["/opt/spark/bin/spark-sql"]
+    command: ["--properties-file", "/opt/lakehouse/spark-defaults.conf"]
+    environment:
+      AWS_REGION: us-east-1
+    volumes:
+      - ./infra/spark:/opt/lakehouse:ro
+      - spark-ivy:/tmp/ivy
+    depends_on:
+      trino:
+        condition: service_healthy
+    mem_limit: ${SPARK_MEM_LIMIT:-3g}
+
+volumes:
+  minio-data:
+  postgres-data:
+  workbench-cache:
+  spark-ivy:
