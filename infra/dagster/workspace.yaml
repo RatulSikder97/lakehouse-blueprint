@@ -1,0 +1,4 @@
+load_from:
+  - python_module:
+      module_name: lakehouse.orchestration.definitions
+      working_directory: /app

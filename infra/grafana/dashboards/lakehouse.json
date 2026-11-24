@@ -1,0 +1,618 @@
+{
+  "uid": "lakehouse-overview",
+  "title": "Lakehouse overview",
+  "tags": [
+    "lakehouse",
+    "iceberg",
+    "trino",
+    "minio"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "editable": true,
+  "panels": [
+    {
+      "type": "row",
+      "title": "Trino",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 1
+    },
+    {
+      "type": "stat",
+      "title": "Running queries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "trino_execution_name_QueryManager_RunningQueries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "area"
+      },
+      "id": 2
+    },
+    {
+      "type": "stat",
+      "title": "Queued queries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "trino_execution_name_QueryManager_QueuedQueries",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "area"
+      },
+      "id": 3
+    },
+    {
+      "type": "stat",
+      "title": "Failed queries (1h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "increase(trino_execution_name_QueryManager_FailedQueries[1h])",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "area"
+      },
+      "id": 4
+    },
+    {
+      "type": "stat",
+      "title": "Cluster memory",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "trino_memory_name_ClusterMemoryManager_ClusterMemoryBytes",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "area"
+      },
+      "id": 5
+    },
+    {
+      "type": "timeseries",
+      "title": "Query throughput",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(trino_execution_name_QueryManager_StartedQueries[5m])",
+          "legendFormat": "started/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "rate(trino_execution_name_QueryManager_CompletedQueries[5m])",
+          "legendFormat": "completed/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "rate(trino_execution_name_QueryManager_FailedQueries[5m])",
+          "legendFormat": "failed/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 6
+    },
+    {
+      "type": "row",
+      "title": "Object storage (MinIO)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 7
+    },
+    {
+      "type": "stat",
+      "title": "Warehouse bucket size",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(minio_bucket_usage_total_bytes{bucket=\"lakehouse\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "area"
+      },
+      "id": 8
+    },
+    {
+      "type": "stat",
+      "title": "Warehouse objects",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 14,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(minio_bucket_usage_object_total{bucket=\"lakehouse\"})",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "area"
+      },
+      "id": 9
+    },
+    {
+      "type": "stat",
+      "title": "Free capacity",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(minio_cluster_capacity_usable_free_bytes)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "area"
+      },
+      "id": 10
+    },
+    {
+      "type": "stat",
+      "title": "MinIO resident memory",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 14,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max(minio_node_process_resident_memory_bytes)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "area"
+      },
+      "id": 11
+    },
+    {
+      "type": "timeseries",
+      "title": "S3 requests by API",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (api) (rate(minio_s3_requests_total[5m]))",
+          "legendFormat": "{{api}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 12
+    },
+    {
+      "type": "timeseries",
+      "title": "S3 traffic",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(minio_s3_traffic_received_bytes[5m]))",
+          "legendFormat": "received",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(minio_s3_traffic_sent_bytes[5m]))",
+          "legendFormat": "sent",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 13
+    },
+    {
+      "type": "row",
+      "title": "Iceberg REST catalog (Lakekeeper)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 1
+      },
+      "panels": [],
+      "id": 14
+    },
+    {
+      "type": "timeseries",
+      "title": "Catalog requests by endpoint",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (method, endpoint) (rate(axum_http_requests_total{endpoint=~\"/catalog/.*\"}[5m]))",
+          "legendFormat": "{{method}} {{endpoint}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 15
+    },
+    {
+      "type": "timeseries",
+      "title": "Catalog errors (4xx/5xx)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(axum_http_requests_total{status=~\"[45]..\"}[5m]))",
+          "legendFormat": "{{status}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 16
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  }
+}
