@@ -1,0 +1,39 @@
+name: lakehouse
+version: "0.1.0"
+config-version: 2
+profile: lakehouse
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: target
+clean-targets: ["target", "dbt_packages", "logs"]
+
+flags:
+  send_anonymous_usage_stats: false
+  require_certificate_validation: true
+
+models:
+  lakehouse:
+    +on_table_exists: replace
+    silver:
+      +schema: silver
+      +materialized: table
+    gold:
+      +schema: gold
+      +materialized: table
+
+seeds:
+  lakehouse:
+    +schema: reference
+    taxi_zone_lookup:
+      +column_types:
+        LocationID: integer
+        Borough: varchar
+        Zone: varchar
+        service_zone: varchar
+
+data_tests:
+  lakehouse:
+    +severity: error

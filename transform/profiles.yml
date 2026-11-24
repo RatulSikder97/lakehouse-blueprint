@@ -1,0 +1,21 @@
+# Two targets, same models:
+#   trino (default) - writes Iceberg tables through Trino into the Lakekeeper catalog
+#   ci              - dbt-duckdb against a bronze parquet fixture; no containers needed
+lakehouse:
+  target: "{{ env_var('DBT_TARGET', 'trino') }}"
+  outputs:
+    trino:
+      type: trino
+      method: none
+      user: dbt
+      host: "{{ env_var('TRINO_HOST', 'trino') }}"
+      port: "{{ env_var('TRINO_PORT', '8080') | int }}"
+      database: lakehouse
+      schema: silver
+      http_scheme: http
+      threads: 4
+    ci:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'target/ci.duckdb') }}"
+      schema: silver
+      threads: 4

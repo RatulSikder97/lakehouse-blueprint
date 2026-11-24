@@ -1,0 +1,73 @@
+version: 2
+
+models:
+  - name: trips
+    description: >
+      Silver trips: typed (money as DECIMAL(12,2)), enriched (duration, payment method) and
+      validated. Rows failing a rule go to rejected_trips instead. Partitioned by pickup_month.
+    columns:
+      - name: trip_id
+        data_tests: [not_null, unique]
+      - name: pickup_month
+        data_tests: [not_null]
+      - name: pickup_hour
+        data_tests:
+          - value_between:
+              arguments: {min_value: 0, max_value: 23}
+      - name: trip_seconds
+        data_tests:
+          - value_between:
+              arguments: {min_value: 1, max_value: 21600}
+      - name: trip_miles
+        data_tests:
+          - value_between:
+              arguments: {min_value: 0.01, max_value: 200}
+      - name: fare_amount
+        data_tests: [non_negative]
+      - name: total_amount
+        data_tests: [not_null, non_negative]
+      - name: payment_method
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [flex_fare, credit_card, cash, no_charge, dispute, voided, unknown]
+      - name: pu_location_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('taxi_zones')
+                field: location_id
+      - name: do_location_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('taxi_zones')
+                field: location_id
+
+  - name: rejected_trips
+    description: Quarantined bronze rows with the first validation rule they failed.
+    columns:
+      - name: trip_id
+        data_tests: [not_null, unique]
+      - name: rejection_reason
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - pickup_outside_source_month
+                  - non_positive_duration
+                  - duration_over_6h
+                  - implausible_distance
+                  - negative_amount
+                  - unknown_location
+
+  - name: taxi_zones
+    description: TLC taxi zone dimension (265 zones) from the reference seed.
+    columns:
+      - name: location_id
+        data_tests: [not_null, unique]
+      - name: borough
+        data_tests: [not_null]
