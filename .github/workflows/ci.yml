@@ -1,0 +1,78 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  UV_FROZEN: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - run: uv sync --only-group dev --no-install-project
+      - name: ruff
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+      - name: sqlfluff
+        run: uv run --no-sync sqlfluff lint transform/models transform/tests
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - run: uv sync --no-group orchestration --no-group transform
+      - run: uv run --no-sync pytest
+
+  dbt-duckdb:
+    runs-on: ubuntu-latest
+    env:
+      DBT_TARGET: ci
+      DBT_PROFILES_DIR: ${{ github.workspace }}/transform
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - run: uv sync
+      - name: Build bronze fixture from committed raw samples
+        run: uv run --no-sync lakehouse fixtures
+      - name: dbt compile
+        working-directory: transform
+        run: uv run --no-sync dbt compile
+      - name: dbt build (seed + models + tests) on DuckDB
+        working-directory: transform
+        run: uv run --no-sync dbt build
+      - name: Dagster definitions validate
+        run: uv run --no-sync dagster definitions validate -m lakehouse.orchestration.definitions
+
+  e2e:
+    needs: [lint, test, dbt-duckdb]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Compose e2e smoke test (MinIO + Lakekeeper + Trino + workbench) on a 1k-row slice
+        run: ./scripts/e2e_smoke.sh
